@@ -17,25 +17,37 @@ $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['u
                 </a>
 
                 <?php
-                // Logic untuk menampilkan link admin_panel.php hanya jika username adalah 'admin'
+                // Tampilkan menu admin jika username adalah 'admin'
                 if (isset($_SESSION['username']) && $_SESSION['username'] === 'admin') {
                     ?>
                     <div class="sb-sidenav-menu-heading">Admin Panel</div>
                     <a class="nav-link" href="admin_panel.php">
                         <div class="sb-nav-link-icon"><i class="fas fa-users-cog"></i></div>
-                        Manajemen User <!-- Diubah -->
+                        Manajemen Pengguna
                     </a>
                     <?php
+                }
+                ?>
+
+                <?php
+                // Tampilkan menu khusus jika username adalah 'ketuart'
+                if (isset($_SESSION['username']) && $_SESSION['username'] === 'ketuart') {
+                ?>
+                    <div class="sb-sidenav-menu-heading">Ketua RT</div>
+                    <a class="nav-link" href="pengaturan_ketuart.php">
+                        <div class="sb-nav-link-icon"><i class="fas fa-cog"></i></div>
+                        Pengaturan
+                    </a>
+                <?php
                 }
                 ?>
 
                 <a class="nav-link" href="registrasiRFID.php">
                     <div class="sb-nav-link-icon"><i class="fas fa-id-card"></i></div> Registrasi RFID
                 </a>
-                <a class="nav-link" href="iuranBulananWarga.php">
-                    <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave"></i></div> Iuran Bulanan Warga
+                <a class="nav-link" href="iuranpl.php">
+                    <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave"></i></div> Iuran Pengelolaan Lingkungan
                 </a>
-                <!-- Link Logout dipindahkan ke sini -->
                 <a class="nav-link" href="logout.php">
                     <div class="sb-nav-link-icon"><i class="fas fa-sign-out-alt"></i></div> Logout
                 </a>
