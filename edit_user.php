@@ -24,7 +24,7 @@ if (isset($_GET['id'])) {
     mysqli_stmt_close($stmt);
 
     if (!$user_data) {
-        $message = "<div class='alert alert-danger'>Pengguna tidak ditemukan!</div>";
+        $message = "<div class='alert alert-danger'>User tidak ditemukan!</div>"; // Diubah
     }
 } else {
     header('Location: admin_panel.php'); // Redirect jika tidak ada ID
@@ -73,12 +73,12 @@ if (isset($_POST['update_user'])) {
             mysqli_stmt_bind_param($stmt_update, $types, ...$params);
 
             if (mysqli_stmt_execute($stmt_update)) {
-                $message = "<div class='alert alert-success'>Pengguna berhasil diperbarui!</div>";
+                $message = "<div class='alert alert-success'>User berhasil diperbarui!</div>"; // Diubah
                 // Perbarui data yang ditampilkan setelah update
                 $query = mysqli_query($conn, "SELECT id, nama_lengkap, username FROM user WHERE id = '$id_to_update'");
                 $user_data = mysqli_fetch_assoc($query);
             } else {
-                $message = "<div class='alert alert-danger'>Gagal memperbarui pengguna: " . mysqli_error($conn) . "</div>";
+                $message = "<div class='alert alert-danger'>Gagal memperbarui user: " . mysqli_error($conn) . "</div>"; // Diubah
             }
             mysqli_stmt_close($stmt_update);
         }
@@ -93,19 +93,20 @@ if (isset($_POST['update_user'])) {
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Edit Pengguna - Panel Admin</title>
+    <title>Edit User - Panel Admin</title> <!-- Diubah -->
     <link href="css/styles.css" rel="stylesheet" />
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="sb-nav-fixed">
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-        <a class="navbar-brand ps-3" href="index.php">Portal RT</a>
+        <a class="navbar-brand ps-3" href="index.php">PURI CENDRAWASIH</a> <!-- Diubah -->
         <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
         <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                    <li><hr class="dropdown-divider" /></li>
                     <li><a class="dropdown-item" href="logout.php">Logout</a></li>
                 </ul>
             </li>
@@ -124,7 +125,7 @@ if (isset($_POST['update_user'])) {
                         <div class="sb-sidenav-menu-heading">Admin Panel</div>
                         <a class="nav-link active" href="admin_panel.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-users-cog"></i></div>
-                            Manajemen Pengguna
+                            Manajemen User <!-- Diubah -->
                         </a>
                         <a class="nav-link" href="registrasiRFID.php">
                             <div class="sb-nav-link-icon"><i class="fas fa-id-card"></i></div> Registrasi RFID
@@ -143,11 +144,11 @@ if (isset($_POST['update_user'])) {
         <div id="layoutSidenav_content">
             <main>
                 <div class="container-fluid px-4">
-                    <h1 class="mt-4">Edit Pengguna</h1>
+                    <h1 class="mt-4">Edit User</h1> <!-- Diubah -->
                     <ol class="breadcrumb mb-4">
                         <li class="breadcrumb-item"><a href="index.php">Dashboard</a></li>
-                        <li class="breadcrumb-item"><a href="admin_panel.php">Manajemen Pengguna</a></li>
-                        <li class="breadcrumb-item active">Edit Pengguna</li>
+                        <li class="breadcrumb-item"><a href="admin_panel.php">Manajemen User</a></li> <!-- Diubah -->
+                        <li class="breadcrumb-item active">Edit User</li> <!-- Diubah -->
                     </ol>
 
                     <?php echo $message; ?>
@@ -156,7 +157,7 @@ if (isset($_POST['update_user'])) {
                         <div class="card mb-4">
                             <div class="card-header">
                                 <i class="fas fa-user-edit me-1"></i>
-                                Edit Data Pengguna: <?php echo htmlspecialchars($user_data['nama_lengkap']); ?>
+                                Edit Data User: <?php echo htmlspecialchars($user_data['nama_lengkap']); ?> <!-- Diubah -->
                             </div>
                             <div class="card-body">
                                 <form method="POST">
@@ -179,8 +180,8 @@ if (isset($_POST['update_user'])) {
                                     </div>
                                     <div class="mt-4 mb-0">
                                         <div class="d-grid">
-                                            <button class="btn btn-primary" type="submit" name="update_user">Perbarui Pengguna</button>
-                                            <a href="admin_panel.php" class="btn btn-secondary mt-2">Kembali ke Daftar Pengguna</a>
+                                            <button class="btn btn-primary" type="submit" name="update_user">Perbarui User</button> <!-- Diubah -->
+                                            <a href="admin_panel.php" class="btn btn-secondary mt-2">Kembali ke Daftar User</a> <!-- Diubah -->
                                         </div>
                                     </div>
                                 </form>
@@ -192,7 +193,7 @@ if (isset($_POST['update_user'])) {
             <footer class="py-4 bg-light mt-auto">
                 <div class="container-fluid px-4">
                     <div class="d-flex align-items-center justify-content-between small">
-                        <div class="text-muted">Copyright &copy; Portal RT Anda 2025</div>
+                        <div class="text-muted">Copyright &copy; PURI CENDRAWASIH 2025</div> <!-- Diubah -->
                     </div>
                 </div>
             </footer>

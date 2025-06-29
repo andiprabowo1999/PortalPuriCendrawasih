@@ -1,71 +1,112 @@
 <?php
 session_start();
-require 'function.php'; // Pastikan ini mengarah ke file koneksi database Anda
-include 'cek.php';    // Memastikan hanya yang login yang bisa akses
+// Memuat file fungsi dan koneksi database
+require 'function.php'; 
+// Memeriksa apakah pengguna sudah login
+include 'cek.php';    
 
-// Pastikan Anda telah menginstal PhpSpreadsheet melalui Composer
-require 'vendor/autoload.php';
+// Inisialisasi tanggal filter, defaultnya adalah hari ini
+$tanggal_awal = isset($_GET['tanggal_awal']) && !empty($_GET['tanggal_awal']) ? $_GET['tanggal_awal'] : date('Y-m-d');
+$tanggal_akhir = isset($_GET['tanggal_akhir']) && !empty($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('Y-m-d');
 
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+// Atur header HTTP untuk memastikan browser mengunduh file sebagai Excel
+$filename = 'Laporan_Akses_Portal_' . $tanggal_awal . '_to_' . $tanggal_akhir . '.xls';
+header("Content-Type: application/vnd-ms-excel");
+header("Content-Disposition: attachment; filename=\"$filename\"");
 
-// Inisialisasi tanggal untuk filter (sama seperti di index.php)
-$tanggal_awal = date('Y-m-d');
-$tanggal_akhir = date('Y-m-d');
+// --- Mengambil Data dari Database ---
+$query = "SELECT
+            la.waktu_akses,
+            r.nama_lengkap,
+            la.rfid_uid,
+            la.status_akses,
+            la.arah_akses,
+            la.status_iuran_terakhir AS status_ipl
+          FROM
+            log_akses la
+          LEFT JOIN
+            rfid r ON la.rfid_uid = r.rfid_uid
+          WHERE
+            DATE(la.waktu_akses) BETWEEN ? AND ?
+          ORDER BY
+            la.waktu_akses ASC";
 
-if (isset($_GET['tanggal_awal']) && !empty($_GET['tanggal_awal'])) {
-    $tanggal_awal = $_GET['tanggal_awal'];
-}
-if (isset($_GET['tanggal_akhir']) && !empty($_GET['tanggal_akhir'])) {
-    $tanggal_akhir = $_GET['tanggal_akhir'];
-}
+$stmt = $conn->prepare($query);
 
-// Buat objek Spreadsheet baru
-$spreadsheet = new Spreadsheet();
-$sheet = $spreadsheet->getActiveSheet();
-
-// Set Judul Kolom
-$sheet->setCellValue('A1', 'Waktu');
-$sheet->setCellValue('B1', 'Nama');
-$sheet->setCellValue('C1', 'RFID');
-$sheet->setCellValue('D1', 'Arah Akses');
-$sheet->setCellValue('E1', 'Status Akses');
-$sheet->setCellValue('F1', 'Status Iuran');
-
-// Ambil data dari database berdasarkan filter tanggal
-$queryData = mysqli_query($conn, "SELECT
-                                    la.waktu_akses,
-                                    kr.nama_lengkap,
-                                    la.rfid_uid,
-                                    la.status_akses,
-                                    la.arah_akses,
-                                    la.status_iuran_terakhir AS status_iuran
-                                  FROM
-                                    log_akses la
-                                  JOIN
-                                    rfid kr ON la.rfid_uid = kr.rfid_uid -- Mengubah kartu_rfid menjadi rfid
-                                  WHERE
-                                    DATE(la.waktu_akses) BETWEEN '$tanggal_awal' AND '$tanggal_akhir'
-                                  ORDER BY
-                                    la.waktu_akses ASC");
-
-$row = 2; // Mulai menulis data dari baris ke-2 (setelah header)
-while ($data = mysqli_fetch_assoc($queryData)) {
-    $sheet->setCellValue('A' . $row, (new DateTime($data['waktu_akses']))->format('Y-m-d H:i:s'));
-    $sheet->setCellValue('B' . $row, $data['nama_lengkap']);
-    $sheet->setCellValue('C' . $row, $data['rfid_uid']);
-    $sheet->setCellValue('D' . $row, $data['arah_akses']);
-    $sheet->setCellValue('E' . $row, $data['status_akses']);
-    $sheet->setCellValue('F' . $row, $data['status_iuran']);
-    $row++;
+// Jika statement gagal disiapkan, hentikan eksekusi
+if ($stmt === false) {
+    die("Error preparing statement: " . htmlspecialchars($conn->error));
 }
 
-// Set header HTTP untuk download file Excel
-$filename = 'Laporan_Akses_Portal_' . $tanggal_awal . '_to_' . $tanggal_akhir . '.xlsx';
-header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-header('Content-Disposition: attachment;filename="' . $filename . '"');
-header('Cache-Control: max-age=0');
+$stmt->bind_param("ss", $tanggal_awal, $tanggal_akhir);
+$stmt->execute();
+$result = $stmt->get_result();
 
-$writer = new Xlsx($spreadsheet);
-$writer->save('php://output');
-exit;
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Laporan Akses Portal</title>
+</head>
+<body>
+    <style type="text/css">
+        body {
+            font-family: sans-serif;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        table th,
+        table td {
+            border: 1px solid #3c3c3c;
+            padding: 8px;
+        }
+    </style>
+
+    <h3>Laporan Akses Portal Otomatis</h3>
+    <p>Periode: <?php echo htmlspecialchars($tanggal_awal); ?> s/d <?php echo htmlspecialchars($tanggal_akhir); ?></p>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>No.</th>
+                <th>Waktu Akses</th>
+                <th>Nama Lengkap</th>
+                <th>UID RFID</th>
+                <th>Arah Akses</th>
+                <th>Status Akses</th>
+                <th>Status IPL Terakhir</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php 
+            $no = 1;
+            // Cek jika ada data yang ditemukan
+            if ($result->num_rows > 0) {
+                while ($data = $result->fetch_assoc()) {
+                    echo "<tr>";
+                    echo "<td>" . $no++ . "</td>";
+                    echo "<td>" . htmlspecialchars($data['waktu_akses']) . "</td>";
+                    echo "<td>" . htmlspecialchars($data['nama_lengkap'] ?? 'N/A') . "</td>"; // Handle jika nama tidak ada
+                    echo "<td>" . htmlspecialchars($data['rfid_uid']) . "</td>";
+                    echo "<td>" . htmlspecialchars($data['arah_akses']) . "</td>";
+                    echo "<td>" . htmlspecialchars($data['status_akses']) . "</td>";
+                    echo "<td>" . htmlspecialchars($data['status_ipl']) . "</td>";
+                    echo "</tr>";
+                }
+            } else {
+                // Tampilkan baris jika tidak ada data
+                echo "<tr><td colspan='7' style='text-align:center;'>Tidak ada data untuk periode yang dipilih.</td></tr>";
+            }
+            ?>
+        </tbody>
+    </table>
+</body>
+</html>
+<?php
+// Tutup statement dan koneksi
+$stmt->close();
+$conn->close();
+exit(); // Pastikan tidak ada output lain setelah ini
+?>

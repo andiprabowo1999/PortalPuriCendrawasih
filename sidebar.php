@@ -23,7 +23,7 @@ $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['u
                     <div class="sb-sidenav-menu-heading">Admin Panel</div>
                     <a class="nav-link" href="admin_panel.php">
                         <div class="sb-nav-link-icon"><i class="fas fa-users-cog"></i></div>
-                        Manajemen Pengguna
+                        Manajemen User <!-- Diubah -->
                     </a>
                     <?php
                 }
@@ -35,6 +35,7 @@ $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['u
                 <a class="nav-link" href="iuranBulananWarga.php">
                     <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave"></i></div> Iuran Bulanan Warga
                 </a>
+                <!-- Link Logout dipindahkan ke sini -->
                 <a class="nav-link" href="logout.php">
                     <div class="sb-nav-link-icon"><i class="fas fa-sign-out-alt"></i></div> Logout
                 </a>
