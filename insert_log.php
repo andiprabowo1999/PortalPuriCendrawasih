@@ -1,129 +1,104 @@
 <?php
-// Pastikan output adalah format JSON
-header('Content-Type: application/json');
-// Sertakan file koneksi database
-require 'function.php'; // function.php seharusnya berisi koneksi $conn
+// NAMA FILE: insert_log.php
 
-// Siapkan respons default jika terjadi error
+header('Content-Type: application/json');
+require 'function.php';
+
 $response = [
     'access_granted' => false,
-    'message' => 'Terjadi kesalahan tidak dikenal.'
+    'message' => 'Kesalahan sistem tidak diketahui.'
 ];
+$status_akses_log = 'DITOLAK';
+$status_iuran_log = 'ERROR SISTEM';
+$rfid_uid = isset($_GET['rfid_uid']) ? $_GET['rfid_uid'] : 'N/A';
+$arah_akses = isset($_GET['arah_akses']) ? $_GET['arah_akses'] : 'N/A';
 
-// Pastikan parameter rfid_uid dan arah_akses diterima dari ESP32
-if (isset($_GET['rfid_uid']) && isset($_GET['arah_akses'])) {
-    $rfid_uid = $_GET['rfid_uid'];
-    $arah_akses = $_GET['arah_akses'];
+if ($rfid_uid !== 'N/A' && $arah_akses !== 'N/A') {
 
     // 1. Ambil Pengaturan Sistem dari Database
-    $query_pengaturan = mysqli_query($conn, "SELECT nama_pengaturan, nilai_pengaturan FROM pengaturan");
+    $pengaturan_query = mysqli_query($conn, "SELECT nama_pengaturan, nilai_pengaturan FROM pengaturan");
     $pengaturan = [];
-    while ($row = mysqli_fetch_assoc($query_pengaturan)) {
+    while ($row = mysqli_fetch_assoc($pengaturan_query)) {
         $pengaturan[$row['nama_pengaturan']] = $row['nilai_pengaturan'];
     }
-    $batas_tunggakan_bulan = isset($pengaturan['batas_tunggakan_bulan']) ? (int)$pengaturan['batas_tunggakan_bulan'] : 2; // Default 2 jika tidak ada di DB
-    $nominal_iuran = isset($pengaturan['nominal_iuran']) ? (int)$pengaturan['nominal_iuran'] : 150000; // Default 150000
+    $batas_tunggakan_bulan = isset($pengaturan['batas_tunggakan_bulan']) ? (int)$pengaturan['batas_tunggakan_bulan'] : 2;
 
-    // 2. Cek apakah RFID terdaftar dan aktif
-    $stmt_rfid = $conn->prepare("SELECT status_rfid FROM rfid WHERE rfid_uid = ?");
+    // 2. Cek status kartu RFID dan dapatkan ID KK-nya
+    $stmt_rfid = $conn->prepare("SELECT id_kk, status_rfid FROM rfid WHERE rfid_uid = ?");
     $stmt_rfid->bind_param("s", $rfid_uid);
     $stmt_rfid->execute();
     $result_rfid = $stmt_rfid->get_result();
 
     if ($result_rfid->num_rows > 0) {
         $rfid_data = $result_rfid->fetch_assoc();
+        $id_kk = $rfid_data['id_kk'];
 
-        if ($rfid_data['status_rfid'] == 'aktif') {
-            // Jika RFID aktif, lanjutkan ke pengecekan selanjutnya
-
-            // Jika arahnya KELUAR, selalu izinkan
+        if (is_null($id_kk)) {
+            $response['message'] = 'Akses DITOLAK: Kartu belum terhubung ke KK.';
+            $status_iuran_log = 'KARTU BELUM TERHUBUNG';
+        }
+        else if ($rfid_data['status_rfid'] !== 'aktif') {
+            $response['message'] = 'Akses DITOLAK: Status kartu tidak aktif.';
+            $status_iuran_log = 'RFID TIDAK AKTIF';
+        } 
+        else {
             if ($arah_akses == 'KELUAR') {
                 $response['access_granted'] = true;
                 $response['message'] = 'Akses DIZINKAN (Keluar).';
                 $status_akses_log = 'DIZINKAN';
                 $status_iuran_log = 'TIDAK RELEVAN';
             } 
-            // Jika arahnya MASUK, cek status IPL
             else if ($arah_akses == 'MASUK') {
                 $tunggakan_beruntun = 0;
-                // Loop mundur sebanyak batas bulan tunggakan
                 for ($i = 0; $i < $batas_tunggakan_bulan; $i++) {
                     $bulan_cek = date('n', strtotime("-$i month"));
                     $tahun_cek = date('Y', strtotime("-$i month"));
 
-                    // Cek status pembayaran di bulan tersebut
-                    $stmt_iuran = $conn->prepare("SELECT status FROM status_iuran WHERE rfid_uid = ? AND bulan = ? AND tahun = ?");
-                    $stmt_iuran->bind_param("sii", $rfid_uid, $bulan_cek, $tahun_cek);
+                    $stmt_iuran = $conn->prepare("SELECT status FROM status_iuran WHERE id_kk = ? AND bulan = ? AND tahun = ?");
+                    $stmt_iuran->bind_param("iii", $id_kk, $bulan_cek, $tahun_cek);
                     $stmt_iuran->execute();
                     $result_iuran = $stmt_iuran->get_result();
                     
-                    $status_bulan_ini = 'BELUM LUNAS'; // Default jika tidak ada data
-                    if ($result_iuran->num_rows > 0) {
-                        $iuran_data = $result_iuran->fetch_assoc();
-                        $status_bulan_ini = $iuran_data['status'];
-                    }
+                    $status_bulan = ($result_iuran->num_rows > 0) ? $result_iuran->fetch_assoc()['status'] : 'BELUM LUNAS';
                     $stmt_iuran->close();
 
-                    // Jika statusnya bukan LUNAS, hitung sebagai tunggakan
-                    if ($status_bulan_ini != 'LUNAS') {
+                    if ($status_bulan !== 'LUNAS') {
                         $tunggakan_beruntun++;
                     } else {
-                        // Jika ada satu bulan lunas, hentikan pengecekan karena tidak lagi beruntun
-                        break;
+                        break; 
                     }
                 }
 
-                // Tentukan akses berdasarkan jumlah tunggakan beruntun
                 if ($tunggakan_beruntun >= $batas_tunggakan_bulan) {
-                    $response['access_granted'] = false;
                     $response['message'] = "Akses DITOLAK: IPL $batas_tunggakan_bulan bulan terakhir belum lunas.";
                     $status_akses_log = 'DITOLAK';
-                    $status_iuran_log = "$batas_tunggakan_bulan BULAN BELUM LUNAS";
+                    $status_iuran_log = "$tunggakan_beruntun BULAN BELUM LUNAS";
                 } else {
                     $response['access_granted'] = true;
                     $response['message'] = 'Akses DIZINKAN.';
                     $status_akses_log = 'DIZINKAN';
-                    $status_iuran_log = ($tunggakan_beruntun > 0) ? 'BELUM LUNAS' : 'LUNAS'; // Status log disederhanakan
+                    $status_iuran_log = ($tunggakan_beruntun > 0) ? 'BELUM LUNAS' : 'LUNAS';
                 }
             }
-
-        } else {
-            // RFID terdaftar tapi statusnya 'tidak_aktif'
-            $response['access_granted'] = false;
-            $response['message'] = 'Akses DITOLAK: RFID tidak aktif.';
-            $status_akses_log = 'DITOLAK';
-            $status_iuran_log = 'RFID TIDAK AKTIF';
         }
-
     } else {
-        // RFID tidak terdaftar sama sekali
-        $response['access_granted'] = false;
         $response['message'] = 'Akses DITOLAK: RFID tidak terdaftar.';
-        $status_akses_log = 'DITOLAK';
         $status_iuran_log = 'TIDAK TERDAFTAR';
     }
     $stmt_rfid->close();
 
-    // 3. Catat semua aktivitas akses ke dalam log, apapun hasilnya
-    $stmt_log = $conn->prepare("INSERT INTO log_akses (rfid_uid, waktu_akses, status_akses, arah_akses, status_iuran_terakhir) VALUES (?, NOW(), ?, ?, ?)");
-    if ($stmt_log === false) {
-        error_log("Gagal menyiapkan statement log: " . $conn->error);
-    } else {
-        $stmt_log->bind_param("ssss", $rfid_uid, $status_akses_log, $arah_akses, $status_iuran_log);
-        if (!$stmt_log->execute()) {
-            // Jika gagal menyimpan log, catat error tapi jangan hentikan respons ke ESP32
-            error_log("Gagal menyimpan log_akses: " . $stmt_log->error);
-        }
-        $stmt_log->close();
-    }
-
 } else {
-    // Jika parameter dari ESP32 tidak lengkap
-    $response['message'] = 'Parameter RFID UID atau Arah Akses tidak lengkap.';
+    $response['message'] = 'Parameter RFID atau Arah Akses tidak lengkap.';
+    $status_iuran_log = 'REQUEST TIDAK LENGKAP';
 }
 
-// Kirimkan respons dalam format JSON ke ESP32
-echo json_encode($response);
+// 3. Catat semua aktivitas akses ke dalam log
+$stmt_log = $conn->prepare("INSERT INTO log_akses (rfid_uid, waktu_akses, status_akses, arah_akses, status_iuran_terakhir) VALUES (?, NOW(), ?, ?, ?)");
+if ($stmt_log) {
+    $stmt_log->bind_param("ssss", $rfid_uid, $status_akses_log, $arah_akses, $status_iuran_log);
+    $stmt_log->execute();
+    $stmt_log->close();
+}
 
-// Tutup koneksi database
+echo json_encode($response);
 $conn->close();

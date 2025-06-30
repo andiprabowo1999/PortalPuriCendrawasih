@@ -1,9 +1,12 @@
 <?php
-// sidebar.php
-// Pastikan session_start() sudah ada di file yang memanggil sidebar.php
-// atau di cek.php agar $_SESSION tersedia.
+// NAMA FILE: sidebar.php
 
-// Default username jika belum login (untuk menghindari error)
+// Memastikan sesi sudah berjalan untuk mengambil data pengguna.
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Mengambil username yang sedang login untuk ditampilkan di footer sidebar
 $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['username']) : 'Guest';
 ?>
 <div id="layoutSidenav_nav">
@@ -17,39 +20,42 @@ $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['u
                 </a>
 
                 <?php
-                // Tampilkan menu admin jika username adalah 'admin'
-                if (isset($_SESSION['username']) && $_SESSION['username'] === 'admin') {
-                    ?>
+                // Tampilkan menu khusus jika pengguna adalah 'admin'
+                if (isset($_SESSION['username']) && $_SESSION['username'] === 'admin'):
+                ?>
                     <div class="sb-sidenav-menu-heading">Admin Panel</div>
                     <a class="nav-link" href="admin_panel.php">
                         <div class="sb-nav-link-icon"><i class="fas fa-users-cog"></i></div>
                         Manajemen Pengguna
                     </a>
-                    <?php
-                }
-                ?>
+                <?php endif; ?>
 
                 <?php
-                // Tampilkan menu khusus jika username adalah 'ketuart'
-                if (isset($_SESSION['username']) && $_SESSION['username'] === 'ketuart') {
+                // Tampilkan menu khusus jika pengguna adalah 'ketuart'
+                if (isset($_SESSION['username']) && $_SESSION['username'] === 'ketuart'):
                 ?>
                     <div class="sb-sidenav-menu-heading">Ketua RT</div>
                     <a class="nav-link" href="pengaturan_ketuart.php">
                         <div class="sb-nav-link-icon"><i class="fas fa-cog"></i></div>
                         Pengaturan
                     </a>
-                <?php
-                }
-                ?>
-
+                <?php endif; ?>
+                
+                <div class="sb-sidenav-menu-heading">Manajemen Warga</div>
                 <a class="nav-link" href="registrasiRFID.php">
-                    <div class="sb-nav-link-icon"><i class="fas fa-id-card"></i></div> Registrasi RFID
+                    <div class="sb-nav-link-icon"><i class="fas fa-id-card"></i></div>
+                    Registrasi RFID
                 </a>
+                
                 <a class="nav-link" href="iuranpl.php">
-                    <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave"></i></div> Iuran Pengelolaan Lingkungan
+                    <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave"></i></div>
+                    Iuran Pengelolaan Lingkungan
                 </a>
+                
+                <div class="sb-sidenav-menu-heading">Akun</div>
                 <a class="nav-link" href="logout.php">
-                    <div class="sb-nav-link-icon"><i class="fas fa-sign-out-alt"></i></div> Logout
+                    <div class="sb-nav-link-icon"><i class="fas fa-sign-out-alt"></i></div>
+                    Logout
                 </a>
             </div>
         </div>

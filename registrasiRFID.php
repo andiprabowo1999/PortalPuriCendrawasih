@@ -1,177 +1,218 @@
 <?php
 require 'function.php';
-include 'cek.php';
+require 'cek.php';
 
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
+// Proses Tambah Kepala Keluarga Baru
+if (isset($_POST['tambah_kk'])) {
+    $nama_kk = $_POST['nama_kepala_keluarga'];
+    $no_rumah = $_POST['nomor_rumah'];
 
-if (!isset($_SESSION['log'])) {
-    header("Location: login.php");
-    exit;
-}
+    $stmt = $conn->prepare("INSERT INTO kepala_keluarga (nama_kepala_keluarga, nomor_rumah) VALUES (?, ?)");
+    $stmt->bind_param("ss", $nama_kk, $no_rumah);
+    
+    if ($stmt->execute()) {
+        // ---- LOGIKA BARU DIMULAI DI SINI ----
+        
+        // 1. Dapatkan ID dari KK yang baru saja ditambahkan
+        $id_kk_baru = mysqli_insert_id($conn);
+        
+        // 2. Dapatkan bulan dan tahun saat ini
+        $bulan_sekarang = date('n');
+        $tahun_sekarang = date('Y');
+        
+        // 3. Ambil nominal iuran standar untuk dicatat
+        $query_nominal = mysqli_query($conn, "SELECT nilai_pengaturan FROM pengaturan WHERE nama_pengaturan = 'nominal_iuran'");
+        $nominal_iuran_standar = mysqli_fetch_assoc($query_nominal)['nilai_pengaturan'] ?? 150000;
 
-// Proses form input RFID jika disubmit (Tambah RFID Baru)
-if (isset($_POST['simpan'])) {
-    $rfid_uid = $_POST['rfid_uid'];
-    $nama_lengkap = $_POST['nama_lengkap'];
-
-    // Cek apakah RFID UID sudah terdaftar di tabel `rfid` (sebelumnya kartu_rfid)
-    $stmt_check = mysqli_prepare($conn, "SELECT rfid_uid FROM rfid WHERE rfid_uid = ?");
-    mysqli_stmt_bind_param($stmt_check, "s", $rfid_uid);
-    mysqli_stmt_execute($stmt_check);
-    mysqli_stmt_store_result($stmt_check);
-
-    if (mysqli_stmt_num_rows($stmt_check) == 0) {
-        // Jika belum terdaftar, masukkan data baru ke tabel `rfid` dengan status 'aktif'
-        // Mengubah nama tabel kartu_rfid menjadi rfid dan status_kartu menjadi status_rfid
-        $stmt_insert = mysqli_prepare($conn, "INSERT INTO rfid (rfid_uid, nama_lengkap, status_rfid) VALUES (?, ?, 'aktif')");
-        mysqli_stmt_bind_param($stmt_insert, "ss", $rfid_uid, $nama_lengkap);
-
-        if (mysqli_stmt_execute($stmt_insert)) {
-            // --- Logika Baru: Isi status_iuran LUNAS sampai bulan sekarang ---
-            $current_month = date('n'); // Bulan saat ini (1-12)
-            $current_year = date('Y'); // Tahun saat ini
-
-            for ($m = 1; $m <= $current_month; $m++) { // Loop dari Januari sampai bulan saat ini
-                $stmt_insert_iuran = mysqli_prepare($conn, "INSERT INTO status_iuran (rfid_uid, bulan, tahun, status, tanggal_pembayaran) VALUES (?, ?, ?, 'LUNAS', NOW())");
-                mysqli_stmt_bind_param($stmt_insert_iuran, "sii", $rfid_uid, $m, $current_year);
-                mysqli_stmt_execute($stmt_insert_iuran);
-                mysqli_stmt_close($stmt_insert_iuran);
-            }
-            // --- Akhir Logika Baru ---
-
-            echo "<script>alert('RFID berhasil didaftarkan dan iuran diatur lunas sampai bulan ini!'); window.location='registrasiRFID.php';</script>";
-        } else {
-            echo "<script>alert('Gagal menyimpan data RFID: " . mysqli_error($conn) . "');</script>";
+        // 4. Loop dari Januari sampai bulan ini, dan set status 'LUNAS'
+        for ($m = 1; $m <= $bulan_sekarang; $m++) {
+            $stmt_iuran = $conn->prepare(
+                "INSERT INTO status_iuran (id_kk, bulan, tahun, status, jumlah_bayar, tanggal_pembayaran) 
+                 VALUES (?, ?, ?, 'LUNAS', ?, NOW())"
+            );
+            $stmt_iuran->bind_param("iisi", $id_kk_baru, $m, $tahun_sekarang, $nominal_iuran_standar);
+            $stmt_iuran->execute();
         }
-        mysqli_stmt_close($stmt_insert);
+        $stmt_iuran->close();
+        
+        // ---- LOGIKA BARU SELESAI ----
+
+        echo "<script>alert('Kepala Keluarga berhasil ditambahkan dan IPL telah diatur lunas hingga bulan ini!'); window.location='registrasiRFID.php';</script>";
     } else {
-        echo "<script>alert('RFID ini sudah terdaftar!');</script>";
+        echo "<script>alert('Gagal menambahkan KK: " . htmlspecialchars($stmt->error) . "');</script>";
     }
-    mysqli_stmt_close($stmt_check);
+    $stmt->close();
 }
 
-// Proses nonaktifkan RFID
-if (isset($_GET['nonaktifkan']) && isset($_GET['rfid_uid'])) {
+// Proses Tambah RFID baru ke KK yang sudah ada
+if (isset($_POST['tambah_rfid'])) {
+    $id_kk = $_POST['id_kk'];
+    $rfid_uid = $_POST['rfid_uid'];
+    $nama_pemegang = $_POST['nama_pemegang'];
+
+    $stmt_check = $conn->prepare("SELECT id_kk FROM rfid WHERE rfid_uid = ?");
+    $stmt_check->bind_param("s", $rfid_uid);
+    $stmt_check->execute();
+    $result_check = $stmt_check->get_result();
+    if ($result_check->num_rows > 0) {
+        echo "<script>alert('RFID UID ini sudah terdaftar di KK lain!');</script>";
+    } else {
+        $stmt_insert = $conn->prepare("INSERT INTO rfid (rfid_uid, id_kk, nama_lengkap, status_rfid) VALUES (?, ?, ?, 'aktif')");
+        $stmt_insert->bind_param("sis", $rfid_uid, $id_kk, $nama_pemegang);
+        
+        if ($stmt_insert->execute()) {
+            echo "<script>alert('Kartu RFID berhasil ditambahkan ke KK!'); window.location='registrasiRFID.php';</script>";
+        } else {
+            echo "<script>alert('Gagal menambahkan RFID: " . htmlspecialchars($stmt_insert->error) . "');</script>";
+        }
+        $stmt_insert->close();
+    }
+    $stmt_check->close();
+}
+
+// Proses ubah status rfid (aktif/tidak aktif)
+if(isset($_GET['action']) && isset($_GET['rfid_uid'])){
     $rfid_uid_to_change = $_GET['rfid_uid'];
-    // Update status_rfid menjadi 'tidak_aktif' di tabel rfid
-    $stmt_update = mysqli_prepare($conn, "UPDATE rfid SET status_rfid = 'tidak_aktif' WHERE rfid_uid = ?"); // Mengubah nama tabel dan kolom
-    mysqli_stmt_bind_param($stmt_update, "s", $rfid_uid_to_change);
-
-    if (mysqli_stmt_execute($stmt_update)) {
-        echo "<script>alert('RFID berhasil dinonaktifkan!'); window.location='registrasiRFID.php';</script>";
+    $new_status = $_GET['action'] === 'nonaktifkan' ? 'tidak_aktif' : 'aktif';
+    $stmt = $conn->prepare("UPDATE rfid SET status_rfid = ? WHERE rfid_uid = ?");
+    $stmt->bind_param("ss", $new_status, $rfid_uid_to_change);
+    if($stmt->execute()){
+         echo "<script>alert('Status RFID berhasil diubah!'); window.location='registrasiRFID.php';</script>";
     } else {
-        echo "<script>alert('Gagal menonaktifkan RFID: " . mysqli_error($conn) . "');</script>";
+         echo "<script>alert('Gagal mengubah status RFID.');</script>";
     }
-    mysqli_stmt_close($stmt_update);
+    $stmt->close();
 }
 
-// Proses aktifkan RFID
-if (isset($_GET['aktifkan']) && isset($_GET['rfid_uid'])) {
-    $rfid_uid_to_change = $_GET['rfid_uid'];
-    // Update status_rfid menjadi 'aktif' di tabel rfid
-    $stmt_update = mysqli_prepare($conn, "UPDATE rfid SET status_rfid = 'aktif' WHERE rfid_uid = ?"); // Mengubah nama tabel dan kolom
-    mysqli_stmt_bind_param($stmt_update, "s", $rfid_uid_to_change);
+// Ambil semua data KK dan RFID yang terkait untuk ditampilkan
+$data_kk = [];
+$result_kk = mysqli_query($conn, "SELECT * FROM kepala_keluarga ORDER BY nama_kepala_keluarga ASC");
+while ($row_kk = mysqli_fetch_assoc($result_kk)) {
+    $id_kk = $row_kk['id_kk'];
+    $data_kk[$id_kk] = $row_kk;
+    $data_kk[$id_kk]['rfid_list'] = [];
 
-    if (mysqli_stmt_execute($stmt_update)) {
-        echo "<script>alert('RFID berhasil diaktifkan kembali!'); window.location='registrasiRFID.php';</script>";
-    } else {
-        echo "<script>alert('Gagal mengaktifkan RFID: " . mysqli_error($conn) . "');</script>";
+    $stmt_rfid = $conn->prepare("SELECT rfid_uid, nama_lengkap, status_rfid FROM rfid WHERE id_kk = ?");
+    $stmt_rfid->bind_param("i", $id_kk);
+    $stmt_rfid->execute();
+    $result_rfid = $stmt_rfid->get_result();
+    while ($row_rfid = $result_rfid->fetch_assoc()) {
+        $data_kk[$id_kk]['rfid_list'][] = $row_rfid;
     }
-    mysqli_stmt_close($stmt_update);
+    $stmt_rfid->close();
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Registrasi RFID - PURI CENDRAWASIH</title>
-    <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
+    <title>Manajemen KK & Registrasi RFID - PURI CENDRAWASIH</title>
     <link href="css/styles.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
 </head>
 <body class="sb-nav-fixed">
-<?php include 'header.php'; // Memasukkan header ?>
-<div id="layoutSidenav">
-    <?php include 'sidebar.php'; // Memasukkan sidebar ?>
-    <div id="layoutSidenav_content">
-        <main>
-            <div class="container-fluid px-4">
-                <h1 class="mt-4">Registrasi RFID</h1>
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <i class="fas fa-id-card me-1"></i>
-                        Form Registrasi RFID
+    <?php include 'header.php'; ?>
+    <div id="layoutSidenav">
+        <?php include 'sidebar.php'; ?>
+        <div id="layoutSidenav_content">
+            <main>
+                <div class="container-fluid px-4">
+                    <h1 class="mt-4">Registrasi RFID</h1>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header"><i class="fas fa-user-plus me-1"></i> Tambah Kepala Keluarga Baru</div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <div class="row g-2">
+                                    <div class="col-md">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="namaKK" name="nama_kepala_keluarga" placeholder="Nama Kepala Keluarga" required>
+                                            <label for="namaKK">Nama Kepala Keluarga</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md">
+                                         <div class="form-floating">
+                                            <input type="text" class="form-control" id="noRumah" name="nomor_rumah" placeholder="Nomor Rumah" required>
+                                            <label for="noRumah">Nomor Rumah (Contoh: A1/05)</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-auto">
+                                        <button type="submit" name="tambah_kk" class="btn btn-primary h-100">Tambah KK</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <form method="POST">
-                            <div class="mb-3">
-                                <label for="rfid_uid" class="form-label">ID RFID</label>
-                                <input type="text" class="form-control" id="rfid_uid" name="rfid_uid" placeholder="Contoh: XX YY ZZ AA" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="nama_lengkap" class="form-label">Nama Lengkap</label>
-                                <input type="text" class="form-control" id="nama_lengkap" name="nama_lengkap" required>
-                            </div>
-                            <button type="submit" name="simpan" class="btn btn-primary">Simpan</button>
-                        </form>
-                    </div>
-                </div>
 
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <i class="fas fa-table me-1"></i>
-                        Data RFID Terdaftar
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-bordered" id="datatablesSimple">
-                            <thead>
-                                <tr>
-                                    <th>RFID UID</th>
-                                    <th>Nama Lengkap</th>
-                                    <th>Status RFID</th> <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php
-                                // Ambil data dari tabel `rfid` (sebelumnya kartu_rfid)
-                                // Mengurutkan berdasarkan waktu dibuat_pada (jika ada) atau rfid_uid
-                                $data = mysqli_query($conn, "SELECT rfid_uid, nama_lengkap, status_rfid FROM rfid ORDER BY dibuat_pada DESC"); // Mengubah nama tabel dan kolom
-                                if (!$data) {
-                                    echo "<tr><td colspan='4'>Error: " . mysqli_error($conn) . "</td></tr>";
-                                } else {
-                                    while ($row = mysqli_fetch_assoc($data)) {
-                                        echo "<tr>";
-                                        echo "<td>" . htmlspecialchars($row['rfid_uid']) . "</td>";
-                                        echo "<td>" . htmlspecialchars($row['nama_lengkap']) . "</td>";
-                                        // Tentukan badge berdasarkan status_rfid (sebelumnya status_kartu)
-                                        $badge_class = ($row['status_rfid'] === 'aktif') ? 'success' : 'secondary'; // Mengubah nama kolom
-                                        echo "<td><span class='badge bg-" . $badge_class . "'>" . htmlspecialchars($row['status_rfid']) . "</span></td>"; // Mengubah nama kolom
-                                        echo "<td>";
-                                        // Tombol Aksi (Aktifkan/Nonaktifkan)
-                                        if ($row['status_rfid'] === 'aktif') { // Mengubah nama kolom
-                                            echo "<a href='registrasiRFID.php?nonaktifkan=true&rfid_uid=" . urlencode($row['rfid_uid']) . "' class='btn btn-warning btn-sm' onclick=\"return confirm('Apakah Anda yakin ingin menonaktifkan RFID ini?');\">Nonaktifkan</a>";
-                                        } else {
-                                            echo "<a href='registrasiRFID.php?aktifkan=true&rfid_uid=" . urlencode($row['rfid_uid']) . "' class='btn btn-success btn-sm' onclick=\"return confirm('Apakah Anda yakin ingin mengaktifkan RFID ini?');\">Aktifkan</a>";
-                                        }
-                                        echo "</td>";
-                                        echo "</tr>";
-                                    }
-                                }
-                                ?>
-                            </tbody>
-                        </table>
+                    <div class="card mb-4">
+                        <div class="card-header"><i class="fas fa-users me-1"></i> Daftar Kepala Keluarga dan Kartu RFID Terdaftar</div>
+                        <div class="card-body">
+                            <div class="accordion" id="accordionKK">
+                                <?php if (empty($data_kk)): ?>
+                                    <p class="text-center text-muted">Belum ada data Kepala Keluarga. Silakan tambahkan dari form di atas.</p>
+                                <?php else: ?>
+                                    <?php foreach ($data_kk as $id_kk => $kk): ?>
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="heading<?php echo $id_kk; ?>">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse<?php echo $id_kk; ?>">
+                                                <strong><?php echo htmlspecialchars($kk['nama_kepala_keluarga']); ?></strong>&nbsp;(<?php echo htmlspecialchars($kk['nomor_rumah']); ?>)
+                                            </button>
+                                        </h2>
+                                        <div id="collapse<?php echo $id_kk; ?>" class="accordion-collapse collapse" data-bs-parent="#accordionKK">
+                                            <div class="accordion-body">
+                                                <h6>Kartu RFID Terdaftar</h6>
+                                                <?php if(empty($kk['rfid_list'])): ?>
+                                                    <p class="text-muted fst-italic">Belum ada kartu RFID yang terdaftar untuk KK ini.</p>
+                                                <?php else: ?>
+                                                <table class="table table-sm table-bordered table-striped">
+                                                    <thead class="table-light"><tr><th>UID RFID</th><th>Nama Pemegang</th><th>Status</th><th>Aksi</th></tr></thead>
+                                                    <tbody>
+                                                        <?php foreach ($kk['rfid_list'] as $rfid): ?>
+                                                            <tr>
+                                                                <td><code><?php echo htmlspecialchars($rfid['rfid_uid']); ?></code></td>
+                                                                <td><?php echo htmlspecialchars($rfid['nama_lengkap']); ?></td>
+                                                                <td>
+                                                                    <?php $badge_class = ($rfid['status_rfid'] === 'aktif') ? 'success' : 'secondary'; ?>
+                                                                    <span class="badge bg-<?php echo $badge_class; ?>"><?php echo htmlspecialchars($rfid['status_rfid']); ?></span>
+                                                                </td>
+                                                                <td>
+                                                                    <?php if ($rfid['status_rfid'] === 'aktif'): ?>
+                                                                        <a href="registrasiRFID.php?action=nonaktifkan&rfid_uid=<?php echo urlencode($rfid['rfid_uid']); ?>" class="btn btn-warning btn-sm" onclick="return confirm('Anda yakin ingin menonaktifkan kartu ini?');">Nonaktifkan</a>
+                                                                    <?php else: ?>
+                                                                        <a href="registrasiRFID.php?action=aktifkan&rfid_uid=<?php echo urlencode($rfid['rfid_uid']); ?>" class="btn btn-success btn-sm" onclick="return confirm('Anda yakin ingin mengaktifkan kembali kartu ini?');">Aktifkan</a>
+                                                                    <?php endif; ?>
+                                                                </td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                                <?php endif; ?>
+                                                <hr>
+                                                <h6>Tambah RFID Baru untuk KK Ini</h6>
+                                                <form method="POST">
+                                                    <input type="hidden" name="id_kk" value="<?php echo $id_kk; ?>">
+                                                    <div class="input-group">
+                                                        <input type="text" class="form-control" name="rfid_uid" placeholder="Scan atau ketik UID RFID baru" required>
+                                                        <input type="text" class="form-control" name="nama_pemegang" placeholder="Nama Pemegang Kartu" required>
+                                                        <button type="submit" name="tambah_rfid" class="btn btn-info">Tambahkan Kartu</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </main>
-        <?php include 'footer.php'; // Memasukkan footer ?>
+            </main>
+            <?php include 'footer.php'; ?>
+        </div>
     </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-<script src="js/scripts.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js" crossorigin="anonymous"></script>
-<script src="js/datatables-simple-demo.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/scripts.js"></script>
 </body>
 </html>
