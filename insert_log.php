@@ -1,27 +1,32 @@
 <?php
 // NAMA FILE: insert_log.php
 
+// Mengatur header agar output selalu berformat JSON
 header('Content-Type: application/json');
+// Memuat file koneksi database
 require 'function.php';
 
+// Menyiapkan respons default jika terjadi kesalahan
 $response = [
     'access_granted' => false,
     'message' => 'Kesalahan sistem tidak diketahui.'
 ];
 $status_akses_log = 'DITOLAK';
 $status_iuran_log = 'ERROR SISTEM';
-$rfid_uid = isset($_GET['rfid_uid']) ? $_GET['rfid_uid'] : 'N/A';
-$arah_akses = isset($_GET['arah_akses']) ? $_GET['arah_akses'] : 'N/A';
 
-if ($rfid_uid !== 'N/A' && $arah_akses !== 'N/A') {
+// Mengambil parameter dari ESP32 dengan aman
+$rfid_uid = isset($_GET['rfid_uid']) ? $_GET['rfid_uid'] : null;
+$arah_akses = isset($_GET['arah_akses']) ? $_GET['arah_akses'] : null;
 
-    // 1. Ambil Pengaturan Sistem dari Database
-    $pengaturan_query = mysqli_query($conn, "SELECT nama_pengaturan, nilai_pengaturan FROM pengaturan");
-    $pengaturan = [];
-    while ($row = mysqli_fetch_assoc($pengaturan_query)) {
-        $pengaturan[$row['nama_pengaturan']] = $row['nilai_pengaturan'];
+if ($rfid_uid && $arah_akses) {
+
+    // 1. Ambil Parameter Kebijakan dari Database
+    $kebijakan_query = mysqli_query($conn, "SELECT nama_kebijakan, nilai_kebijakan FROM parameter_kebijakan");
+    $kebijakan = [];
+    while ($row = mysqli_fetch_assoc($kebijakan_query)) {
+        $kebijakan[$row['nama_kebijakan']] = $row['nilai_kebijakan'];
     }
-    $batas_tunggakan_bulan = isset($pengaturan['batas_tunggakan_bulan']) ? (int)$pengaturan['batas_tunggakan_bulan'] : 2;
+    $batas_tunggakan_bulan = isset($kebijakan['batas_tunggakan_bulan']) ? (int)$kebijakan['batas_tunggakan_bulan'] : 2;
 
     // 2. Cek status kartu RFID dan dapatkan ID KK-nya
     $stmt_rfid = $conn->prepare("SELECT id_kk, status_rfid FROM rfid WHERE rfid_uid = ?");

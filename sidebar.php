@@ -1,12 +1,4 @@
 <?php
-// NAMA FILE: sidebar.php
-
-// Memastikan sesi sudah berjalan untuk mengambil data pengguna.
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Mengambil username yang sedang login untuk ditampilkan di footer sidebar
 $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['username']) : 'Guest';
 ?>
 <div id="layoutSidenav_nav">
@@ -19,10 +11,7 @@ $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['u
                     Monitoring Akses Portal
                 </a>
 
-                <?php
-                // Tampilkan menu khusus jika pengguna adalah 'admin'
-                if (isset($_SESSION['username']) && $_SESSION['username'] === 'admin'):
-                ?>
+                <?php if (isset($_SESSION['username']) && $_SESSION['username'] === 'admin'): ?>
                     <div class="sb-sidenav-menu-heading">Admin Panel</div>
                     <a class="nav-link" href="admin_panel.php">
                         <div class="sb-nav-link-icon"><i class="fas fa-users-cog"></i></div>
@@ -30,14 +19,11 @@ $loggedInUsername = isset($_SESSION['username']) ? htmlspecialchars($_SESSION['u
                     </a>
                 <?php endif; ?>
 
-                <?php
-                // Tampilkan menu khusus jika pengguna adalah 'ketuart'
-                if (isset($_SESSION['username']) && $_SESSION['username'] === 'ketuart'):
-                ?>
+                <?php if (isset($_SESSION['username']) && $_SESSION['username'] === 'ketuart'): ?>
                     <div class="sb-sidenav-menu-heading">Ketua RT</div>
-                    <a class="nav-link" href="pengaturan_ketuart.php">
-                        <div class="sb-nav-link-icon"><i class="fas fa-cog"></i></div>
-                        Pengaturan
+                    <a class="nav-link" href="parameter_kebijakan.php">
+                        <div class="sb-nav-link-icon"><i class="fas fa-cogs"></i></div>
+                        Parameter Kebijakan
                     </a>
                 <?php endif; ?>
                 

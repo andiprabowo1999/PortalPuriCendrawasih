@@ -4,13 +4,13 @@
 require 'function.php';
 require 'cek.php';
 
-// --- Mengambil Pengaturan Sistem ---
-$query_pengaturan = mysqli_query($conn, "SELECT nama_pengaturan, nilai_pengaturan FROM pengaturan");
-$pengaturan = [];
-while ($row = mysqli_fetch_assoc($query_pengaturan)) {
-    $pengaturan[$row['nama_pengaturan']] = $row['nilai_pengaturan'];
+// --- Mengambil Parameter Kebijakan ---
+$query_kebijakan = mysqli_query($conn, "SELECT nama_kebijakan, nilai_kebijakan FROM parameter_kebijakan");
+$kebijakan = [];
+while ($row = mysqli_fetch_assoc($query_kebijakan)) {
+    $kebijakan[$row['nama_kebijakan']] = $row['nilai_kebijakan'];
 }
-$nominal_iuran_standar = isset($pengaturan['nominal_iuran']) ? (int)$pengaturan['nominal_iuran'] : 150000;
+$nominal_iuran_standar = isset($kebijakan['nominal_iuran']) ? (int)$kebijakan['nominal_iuran'] : 150000;
 
 $tahun_tampil = isset($_GET['tahun']) ? (int)$_GET['tahun'] : date('Y');
 
@@ -20,7 +20,6 @@ if (isset($_POST['update_iuran'])) {
     $bulan_update = (int)$_POST['bulan_update'];
     $jumlah_bayar_input = (int)preg_replace('/[^0-9]/', '', $_POST['jumlah_bayar']);
 
-    // Tentukan status pembayaran baru
     if ($jumlah_bayar_input >= $nominal_iuran_standar) {
         $status_baru = 'LUNAS';
     } else if ($jumlah_bayar_input > 0) {
@@ -29,8 +28,6 @@ if (isset($_POST['update_iuran'])) {
         $status_baru = 'BELUM LUNAS';
     }
     
-    // Gunakan INSERT ... ON DUPLICATE KEY UPDATE untuk efisiensi.
-    // Ini akan membuat baris baru jika belum ada, atau memperbarui jika sudah ada.
     $stmt = $conn->prepare("
         INSERT INTO status_iuran (id_kk, bulan, tahun, status, jumlah_bayar, tanggal_pembayaran) 
         VALUES (?, ?, ?, ?, ?, NOW())
@@ -57,7 +54,6 @@ while ($row_kk = mysqli_fetch_assoc($result_kk_list)) {
         'nomor_rumah' => $row_kk['nomor_rumah'],
         'iuran' => []
     ];
-    // Ambil semua data iuran untuk KK ini dalam satu query
     $stmt_iuran = $conn->prepare("SELECT bulan, status, jumlah_bayar FROM status_iuran WHERE id_kk = ? AND tahun = ?");
     $stmt_iuran->bind_param("ii", $id_kk, $tahun_tampil);
     $stmt_iuran->execute();
@@ -78,11 +74,60 @@ $months = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun
     <link href="css/styles.css" rel="stylesheet" />
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
     <style>
-        .table-responsive-wrapper { overflow-x: auto; }
-        .table th, .table td { white-space: nowrap; vertical-align: middle; padding: 0.5rem; text-align: center;}
-        .table th:nth-child(2), .table td:nth-child(2) { text-align: left; }
+        .table-responsive-wrapper { 
+            overflow-x: auto; 
+            position: relative;
+        }
+        .table th, .table td { 
+            white-space: nowrap; 
+            vertical-align: middle; 
+            padding: 0.5rem; 
+            text-align: center;
+        }
+        .table th:nth-child(2), .table td:nth-child(2) { 
+            text-align: left; 
+        }
         .badge { font-size: 0.8em; }
         .form-control-sm { min-width: 120px; }
+
+        /* ================================================== */
+        /* CSS BARU UNTUK MEMBUAT KOLOM STICKY (TETAP)      */
+        /* ================================================== */
+
+        /* Kolom pertama (No.) */
+        .table thead th:nth-child(1),
+        .table tbody td:nth-child(1) {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background-color: #f8f9fa; /* Warna latar agar tidak transparan */
+        }
+
+        /* Kolom kedua (Nama Kepala Keluarga) */
+        .table thead th:nth-child(2),
+        .table tbody td:nth-child(2) {
+            position: sticky;
+            left: 50px; /* Sesuaikan dengan lebar kolom No. */
+            z-index: 2;
+            background-color: #f8f9fa;
+        }
+
+        /* Kolom terakhir (Update Pembayaran) */
+        .table thead th:last-child,
+        .table tbody td:last-child {
+            position: sticky;
+            right: 0;
+            z-index: 2;
+            background-color: #f8f9fa;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1); /* Bayangan untuk efek visual */
+        }
+        
+        /* Pastikan header juga sticky di atas */
+        .table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 3; /* z-index lebih tinggi dari sel biasa */
+        }
     </style>
 </head>
 <body class="sb-nav-fixed">

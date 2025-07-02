@@ -1,4 +1,6 @@
 <?php
+// NAMA FILE: registrasiRFID.php
+
 require 'function.php';
 require 'cek.php';
 
@@ -11,20 +13,14 @@ if (isset($_POST['tambah_kk'])) {
     $stmt->bind_param("ss", $nama_kk, $no_rumah);
     
     if ($stmt->execute()) {
-        // ---- LOGIKA BARU DIMULAI DI SINI ----
-        
-        // 1. Dapatkan ID dari KK yang baru saja ditambahkan
+        // Logika untuk auto-lunas
         $id_kk_baru = mysqli_insert_id($conn);
-        
-        // 2. Dapatkan bulan dan tahun saat ini
         $bulan_sekarang = date('n');
         $tahun_sekarang = date('Y');
         
-        // 3. Ambil nominal iuran standar untuk dicatat
-        $query_nominal = mysqli_query($conn, "SELECT nilai_pengaturan FROM pengaturan WHERE nama_pengaturan = 'nominal_iuran'");
-        $nominal_iuran_standar = mysqli_fetch_assoc($query_nominal)['nilai_pengaturan'] ?? 150000;
+        $query_nominal = mysqli_query($conn, "SELECT nilai_kebijakan FROM parameter_kebijakan WHERE nama_kebijakan = 'nominal_iuran'");
+        $nominal_iuran_standar = mysqli_fetch_assoc($query_nominal)['nilai_kebijakan'] ?? 150000;
 
-        // 4. Loop dari Januari sampai bulan ini, dan set status 'LUNAS'
         for ($m = 1; $m <= $bulan_sekarang; $m++) {
             $stmt_iuran = $conn->prepare(
                 "INSERT INTO status_iuran (id_kk, bulan, tahun, status, jumlah_bayar, tanggal_pembayaran) 
@@ -33,9 +29,7 @@ if (isset($_POST['tambah_kk'])) {
             $stmt_iuran->bind_param("iisi", $id_kk_baru, $m, $tahun_sekarang, $nominal_iuran_standar);
             $stmt_iuran->execute();
         }
-        $stmt_iuran->close();
-        
-        // ---- LOGIKA BARU SELESAI ----
+        if (isset($stmt_iuran)) $stmt_iuran->close();
 
         echo "<script>alert('Kepala Keluarga berhasil ditambahkan dan IPL telah diatur lunas hingga bulan ini!'); window.location='registrasiRFID.php';</script>";
     } else {
@@ -44,7 +38,7 @@ if (isset($_POST['tambah_kk'])) {
     $stmt->close();
 }
 
-// Proses Tambah RFID baru ke KK yang sudah ada
+// Proses Tambah RFID baru ke KK
 if (isset($_POST['tambah_rfid'])) {
     $id_kk = $_POST['id_kk'];
     $rfid_uid = $_POST['rfid_uid'];
@@ -53,8 +47,7 @@ if (isset($_POST['tambah_rfid'])) {
     $stmt_check = $conn->prepare("SELECT id_kk FROM rfid WHERE rfid_uid = ?");
     $stmt_check->bind_param("s", $rfid_uid);
     $stmt_check->execute();
-    $result_check = $stmt_check->get_result();
-    if ($result_check->num_rows > 0) {
+    if ($stmt_check->get_result()->num_rows > 0) {
         echo "<script>alert('RFID UID ini sudah terdaftar di KK lain!');</script>";
     } else {
         $stmt_insert = $conn->prepare("INSERT INTO rfid (rfid_uid, id_kk, nama_lengkap, status_rfid) VALUES (?, ?, ?, 'aktif')");
@@ -70,7 +63,7 @@ if (isset($_POST['tambah_rfid'])) {
     $stmt_check->close();
 }
 
-// Proses ubah status rfid (aktif/tidak aktif)
+// Proses ubah status rfid
 if(isset($_GET['action']) && isset($_GET['rfid_uid'])){
     $rfid_uid_to_change = $_GET['rfid_uid'];
     $new_status = $_GET['action'] === 'nonaktifkan' ? 'tidak_aktif' : 'aktif';
@@ -84,7 +77,7 @@ if(isset($_GET['action']) && isset($_GET['rfid_uid'])){
     $stmt->close();
 }
 
-// Ambil semua data KK dan RFID yang terkait untuk ditampilkan
+// Ambil semua data KK dan RFID terkait
 $data_kk = [];
 $result_kk = mysqli_query($conn, "SELECT * FROM kepala_keluarga ORDER BY nama_kepala_keluarga ASC");
 while ($row_kk = mysqli_fetch_assoc($result_kk)) {
@@ -101,7 +94,6 @@ while ($row_kk = mysqli_fetch_assoc($result_kk)) {
     }
     $stmt_rfid->close();
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">

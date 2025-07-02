@@ -38,7 +38,7 @@ $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('
                                     <input class="form-control" type="date" name="tanggal_akhir" id="tanggal_akhir" value="<?= htmlspecialchars($tanggal_akhir) ?>">
                                 </div>
                                 <div class="col-auto align-self-end">
-                                    <button type="submit" class="btn btn-primary"><i class="fas fa-search me-2"></i>Tampilkan</button>
+                                    <button type="submit" class="btn btn-primary"><i class="fas fa-search me-2"></i>Filter</button>
                                 </div>
                                 <div class="col-auto align-self-end">
                                     <a href="export_excel.php?tanggal_awal=<?= htmlspecialchars($tanggal_awal) ?>&tanggal_akhir=<?= htmlspecialchars($tanggal_akhir) ?>" target="_blank" class="btn btn-success">
