@@ -1,68 +1,64 @@
 <?php
-// get_latest_data.php
+// NAMA FILE: get_latest_data.php
+
+// Mengatur header agar output selalu berformat JSON
 header('Content-Type: application/json');
-require 'function.php';
-require 'cek.php';
+require 'function.php'; // Memuat koneksi database
+// Tidak perlu cek login karena ini adalah endpoint data, keamanan ditangani oleh sesi di halaman utama
 
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!isset($_SESSION['log']) || $_SESSION['log'] !== true) {
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized access.']);
-    exit;
-}
-
+// Mengambil parameter rentang tanggal dari permintaan JavaScript
 $tanggal_awal = isset($_GET['tanggal_awal']) ? $_GET['tanggal_awal'] : date('Y-m-d');
 $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('Y-m-d');
 
-$response = [];
+// Menyiapkan array respons default
+$response = [
+    'status' => 'error',
+    'message' => 'Gagal mengambil data.',
+    'data' => []
+];
 
-$query = "SELECT
+// Query untuk mengambil data log akses
+$query = "SELECT 
             la.waktu_akses,
-            kr.nama_lengkap,
+            r.nama_lengkap,
             la.rfid_uid,
             la.status_akses,
             la.arah_akses,
-            la.status_iuran_terakhir AS status_iuran
-          FROM
+            la.status_iuran_terakhir
+          FROM 
             log_akses la
-          JOIN
-            rfid kr ON la.rfid_uid = kr.rfid_uid -- Mengubah kartu_rfid menjadi rfid
-          WHERE
+          LEFT JOIN 
+            rfid r ON la.rfid_uid = r.rfid_uid
+          WHERE 
             DATE(la.waktu_akses) BETWEEN ? AND ?
-          ORDER BY
+          ORDER BY 
             la.waktu_akses DESC";
 
-$stmt = mysqli_prepare($conn, $query);
-if ($stmt === false) {
-    echo json_encode(['status' => 'error', 'message' => 'Failed to prepare statement: ' . mysqli_error($conn)]);
-    exit;
-}
-
-mysqli_stmt_bind_param($stmt, "ss", $tanggal_awal, $tanggal_akhir);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-
-$data_per_tanggal = [];
-if ($result) {
-    while ($row = mysqli_fetch_assoc($result)) {
-        $tanggal_log = date('Y-m-d', strtotime($row['waktu_akses']));
-        if (!isset($data_per_tanggal[$tanggal_log])) {
-            $data_per_tanggal[$tanggal_log] = [];
+$stmt = $conn->prepare($query);
+if ($stmt) {
+    $stmt->bind_param("ss", $tanggal_awal, $tanggal_akhir);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $data_log = [];
+    while ($row = $result->fetch_assoc()) {
+        // Memastikan semua data adalah string dan aman untuk ditampilkan
+        foreach ($row as $key => $value) {
+            $row[$key] = htmlspecialchars($value ?? '');
         }
-        $data_per_tanggal[$tanggal_log][] = $row;
+        $data_log[] = $row;
     }
-    mysqli_free_result($result);
+    
     $response['status'] = 'success';
-    $response['data'] = $data_per_tanggal;
+    $response['message'] = 'Data berhasil diambil.';
+    $response['data'] = $data_log;
+    
+    $stmt->close();
 } else {
-    $response['status'] = 'error';
-    $response['message'] = 'Failed to fetch data: ' . mysqli_error($conn);
-    $response['data'] = [];
+    $response['message'] = 'Error: Gagal menyiapkan query database.';
 }
 
-mysqli_stmt_close($stmt);
-mysqli_close($conn);
-
+$conn->close();
+// Mengirimkan data dalam format JSON
 echo json_encode($response);
+?>
