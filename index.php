@@ -38,10 +38,10 @@ $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('
                                     <input class="form-control" type="date" name="tanggal_akhir" id="tanggal_akhir" value="<?= htmlspecialchars($tanggal_akhir) ?>">
                                 </div>
                                 <div class="col-auto align-self-end">
-                                    <button type="submit" class="btn btn-primary"><i class="fas fa-search me-2"></i>Filter</button>
+                                    <button type="button" id="filterButton" class="btn btn-primary"><i class="fas fa-search me-2"></i>Filter</button>
                                 </div>
                                 <div class="col-auto align-self-end">
-                                    <a href="export_excel.php?tanggal_awal=<?= htmlspecialchars($tanggal_awal) ?>&tanggal_akhir=<?= htmlspecialchars($tanggal_akhir) ?>" target="_blank" class="btn btn-success">
+                                    <a id="exportLink" href="export_excel.php?tanggal_awal=<?= htmlspecialchars($tanggal_awal) ?>&tanggal_akhir=<?= htmlspecialchars($tanggal_akhir) ?>" target="_blank" class="btn btn-success">
                                         <i class="fas fa-file-excel me-2"></i>Export ke Excel
                                     </a>
                                 </div>
@@ -63,24 +63,7 @@ $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php
-                                    $stmt = $conn->prepare("SELECT la.waktu_akses, r.nama_lengkap, la.rfid_uid, la.status_akses, la.arah_akses, la.status_iuran_terakhir FROM log_akses la LEFT JOIN rfid r ON la.rfid_uid = r.rfid_uid WHERE DATE(la.waktu_akses) BETWEEN ? AND ? ORDER BY la.waktu_akses DESC");
-                                    $stmt->bind_param("ss", $tanggal_awal, $tanggal_akhir);
-                                    $stmt->execute();
-                                    $result_log = $stmt->get_result();
-                                    while ($data = mysqli_fetch_array($result_log)) {
-                                        echo "<tr>
-                                            <td>" . htmlspecialchars($data['waktu_akses']) . "</td>
-                                            <td>" . htmlspecialchars($data['nama_lengkap'] ?? 'Kartu Dihapus/Tidak Dikenal') . "</td>
-                                            <td><code>" . htmlspecialchars($data['rfid_uid']) . "</code></td>
-                                            <td>" . htmlspecialchars($data['arah_akses']) . "</td>
-                                            <td>" . htmlspecialchars($data['status_akses']) . "</td>
-                                            <td>" . htmlspecialchars($data['status_iuran_terakhir']) . "</td>
-                                          </tr>";
-                                    }
-                                    $stmt->close();
-                                    ?>
-                                </tbody>
+                                    </tbody>
                             </table>
                         </div>
                     </div>
@@ -92,20 +75,8 @@ $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/simple-datatables@latest" crossorigin="anonymous"></script>
     <script src="js/scripts.js"></script>
-    <script src="js/datatables-simple-demo.js"></script>
     <script>
         let dataTable;
-
-        // Opsi untuk inisialisasi DataTable
-        const datatableOptions = {
-            searchable: false,
-            paging: false,
-            info: false,
-            data: {
-                headings: ['Waktu', 'Nama Pemegang Kartu', 'UID RFID', 'Arah', 'Status Akses', 'Status IPL'],
-                data: [] // Mulai dengan data kosong
-            }
-        };
 
         // Fungsi untuk mengambil data dan memperbarui tabel
         function fetchDataAndDisplay() {
@@ -124,20 +95,29 @@ $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('
                 })
                 .then(jsonResponse => {
                     if (jsonResponse.status === 'success') {
-                        const newData = [];
-                        jsonResponse.data.forEach(row => {
-                            newData.push([
+                        const newData = {
+                            headings: ['Waktu', 'Nama Pemegang Kartu', 'UID RFID', 'Arah', 'Status Akses', 'Status IPL'],
+                            data: jsonResponse.data.map(row => [
                                 row.waktu_akses,
                                 row.nama_lengkap || 'Kartu Dihapus/Tidak Dikenal',
                                 `<code>${row.rfid_uid}</code>`,
                                 row.arah_akses,
                                 row.status_akses,
                                 row.status_iuran_terakhir
-                            ]);
+                            ])
+                        };
+                        
+                        if (dataTable) {
+                            dataTable.destroy();
+                        }
+
+                        dataTable = new simpleDatatables.DataTable("#datatablesSimple", {
+                            data: newData,
+                            searchable: false,
+                            paging: false,
+                            info: false,
                         });
 
-                        // Gunakan metode .import() untuk memperbarui data tabel
-                        dataTable.import({ type: 'data', data: newData });
                         console.log('Tabel berhasil diperbarui.');
                     } else {
                         console.error('API Error:', jsonResponse.message);
@@ -148,17 +128,17 @@ $tanggal_akhir = isset($_GET['tanggal_akhir']) ? $_GET['tanggal_akhir'] : date('
 
         // Event listener saat halaman selesai dimuat
         document.addEventListener('DOMContentLoaded', () => {
-            // Inisialisasi DataTable sekali saja
-            dataTable = new simpleDatatables.DataTable("#logTable", datatableOptions);
-            
             // Muat data untuk pertama kali
             fetchDataAndDisplay(); 
             
-            // Atur auto-refresh setiap 30 detik
-            setInterval(fetchDataAndDisplay, 30000);
+            // Atur auto-refresh setiap 5 detik (5000 milidetik)
+            setInterval(fetchDataAndDisplay, 5000);
 
             // Tambahkan event listener untuk tombol filter
-            document.getElementById('filterButton').addEventListener('click', fetchDataAndDisplay);
+            document.getElementById('filterButton').addEventListener('click', (e) => {
+                e.preventDefault(); // Mencegah form submit
+                fetchDataAndDisplay();
+            });
         });
     </script>
 </body>
